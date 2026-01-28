@@ -31,12 +31,16 @@ __STACK_SIZE = 0x00001000;
 __HEAP_SIZE  = 0x00008000;
 __ROM_BASE = 0x80000000;
 __ROM_SIZE = 0x00180000;
+ /* 외부 플래시 영역 정의 */ 
+__OSPI_FLASH_BASE = 0xB0000000;
+__OSPI_FLASH_SIZE = 0x02000000; /* 128MB 중 32MB 할당 */
 
 MEMORY
 {
   ITCM  (rwx) : ORIGIN = 0x01000000, LENGTH = 0x00080000
   DTCM  (rwx) : ORIGIN = 0x20000000, LENGTH = 0x00180000
   MRAM  (rx)  : ORIGIN = __ROM_BASE, LENGTH = __ROM_SIZE
+  OSPI_FLASH (rx) : ORIGIN = __OSPI_FLASH_BASE, LENGTH = __OSPI_FLASH_SIZE
 }
 
 ENTRY(Reset_Handler)
@@ -210,4 +214,9 @@ SECTIONS
 
     KEEP(*(.eh_frame*))
   } > MRAM
+
+  .readonly.at_ext_flash : ALIGN(8)
+  {
+    *(nn_model_ext_flash)
+  } > OSPI_FLASH
 }
