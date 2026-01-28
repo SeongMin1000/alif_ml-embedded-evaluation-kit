@@ -42,8 +42,13 @@ generate_labels_code(
     OUTPUT_FILENAME "${${use_case}_LABELS_CPP_FILE}"
 )
 
+# E1C provides only DTCM (1.5MB) with no dedicated SRAM.
+# The default 2MB activation buffer exceeds available DTCM and causes
+# runtime allocation failures in TensorFlow Lite Micro.
+# The buffer size is adjusted to match the actual tensor arena
+# requirement observed at runtime (~1.44MB) for the img_class model.
 USER_OPTION(${use_case}_ACTIVATION_BUF_SZ "Activation buffer size for the chosen model"
-    0x00200000
+    0x00172000
     STRING)
 
 if (ETHOS_U_NPU_ENABLED)
