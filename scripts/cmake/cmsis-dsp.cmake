@@ -76,7 +76,7 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         message(WARNING "There are known issues with CMSIS-DSP builds using "
                         "MVE extension without optimisation. Forcing -O3 "
                         "optimisation level")
-        target_compile_options(${CMSIS_DSP_TARGET} PUBLIC -O3)
+        target_compile_options(${CMSIS_DSP_TARGET} PUBLIC -Og)
     endif()
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "ARMClang")
     # For Arm Compiler the floating-point standard conformance is set to'std'
