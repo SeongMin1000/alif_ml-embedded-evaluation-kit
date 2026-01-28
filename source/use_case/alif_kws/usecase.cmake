@@ -27,6 +27,10 @@
 # Append the API to use for this use case
 list(APPEND ${use_case}_API_LIST "kws")
 
+USER_OPTION(${use_case}_MODEL_IN_EXT_FLASH "Run model from external flash" 
+    ON 
+    BOOL) 
+
 USER_OPTION(${use_case}_LABELS_TXT_FILE "Labels' txt file for the chosen model."
     ${CMAKE_CURRENT_SOURCE_DIR}/resources/kws/labels/micronet_kws_labels.txt
     FILEPATH)
