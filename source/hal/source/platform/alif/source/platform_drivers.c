@@ -671,10 +671,31 @@ void MPU_Load_Regions(void)
          .RBAR = ARM_MPU_RBAR(0x83000000, ARM_MPU_SH_NON, 0, 1, 1),
          .RLAR = ARM_MPU_RLAR(0x83FFFFFF, MEMATTRIDX_DEVICE_nGnRE)
      },
-     {   /* OSPI0 XIP(eg:hyperram) - 512MB : RO-0, NP-1, XN-0  */
-         .RBAR = ARM_MPU_RBAR(0xA0000000, ARM_MPU_SH_NON, 0, 1, 0),
-         .RLAR = ARM_MPU_RLAR(0xBFFFFFFF, MEMATTRIDX_NORMAL_WB_RA_WA)
+        /* [Update 1] OSPI External RAM - 256MB : RO-0, NP-1, XN-0 */
+     {
+        /*
+        * External RAM region
+        * - Read/Write accessible memory
+        * - Write-Back (WB) with Read/Write Allocate (RA/WA) cache policy
+        * - Optimized for high-performance data accesses
+        */
+         .RBAR = ARM_MPU_RBAR(0xA0000000, ARM_MPU_SH_NON, 0, 1, 0), /* RO=0, NP=1, XN=0 */
+         .RLAR = ARM_MPU_RLAR(0xAFFFFFFF, MEMATTRIDX_NORMAL_WB_RA_WA)
      },
+
+        /* [Update 2] OSPI External Flash - 256MB : RO-1, NP-1, XN-0 */
+     {
+        /*
+        * External Flash region
+        * - Hardware read-only memory (writes are not allowed)
+        * - Using Write-Back cache on Flash may cause bus errors
+        * - Flash-specific memory attribute (MEMATTRIDX_FLASH_SWITCHABLE) is applied
+        * - Executable region for XIP (e.g., AI model weights execution)
+        */
+         .RBAR = ARM_MPU_RBAR(0xB0000000, ARM_MPU_SH_NON, 1, 1, 0), /* RO=1, NP=1, XN=0 */
+         .RLAR = ARM_MPU_RLAR(0xBFFFFFFF, MEMATTRIDX_FLASH_SWITCHABLE)
+     },
+
  #endif
      { // System PPB
      .RBAR = ARM_MPU_RBAR(0xE0000000, ARM_MPU_SH_NON, 1, 0, 1),  // RW, P, XN
