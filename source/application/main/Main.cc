@@ -37,6 +37,26 @@ __ASM(" .global __ARM_use_no_argv\n");
 /* Print application information. */
 static void PrintApplicationIntro()
 {
+    /* NOTE:
+    * On the Alif platform, I/D-cache is enabled during the CMSIS system
+    * initialization phase.
+    * To disable I/D-cache, comment out the following line in:
+    * dependencies/cmsis-alif/Device/core/common/source/system.c
+    *
+    *   SCB->CCR |= SCB_CCR_IC_Msk | SCB_CCR_DC_Msk | SCB_CCR_LOB_Msk;
+    */
+    if (SCB->CCR & SCB_CCR_IC_Msk) {
+        info("I-Cache is ENABLED\n");
+    } else {
+        info("I-Cache is DISABLED\n");
+    }
+
+    if (SCB->CCR & SCB_CCR_DC_Msk) {
+        info("D-Cache is ENABLED\n");
+    } else {
+        info("D-Cache is DISABLED\n");
+    }
+
     info("%s\n", PRJ_DES_STR);
     info("Version %s Build date: " __DATE__ " @ " __TIME__ "\n", PRJ_VER_STR);
     info("Copyright 2021-2024 Arm Limited and/or its affiliates <open-source-office@arm.com>\n\n");
