@@ -32,6 +32,7 @@ typedef struct hal_camera_device_ {
 } hal_cam_dev;
 
 static hal_cam_dev dev;
+static uint32_t idx = 0; // [Updated]
 
 static void hal_camera_reset(void)
 {
@@ -45,7 +46,8 @@ static void hal_camera_reset(void)
 }
 
 bool hal_camera_init(void)
-{
+{   
+    idx = 0; // [Updated]
     hal_camera_reset();
     info("Initialising camera interface: %s\n", dev.name);
     if (get_sample_n_elements() > 0) {
@@ -119,7 +121,7 @@ bool hal_camera_start(void)
 
 const uint8_t* hal_camera_get_captured_frame(uint32_t* size)
 {
-    static uint32_t idx = 0;
+    // [Updated] static uint32_t idx = 0;
     const uint8_t* buffer = NULL;
     *size = 0;
     if (hal_camera_get_status() == HAL_CAMERA_STATUS_STOPPED) {
