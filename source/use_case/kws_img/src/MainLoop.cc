@@ -1,3 +1,15 @@
+/* This file was ported to work on Alif Semiconductor devices. */
+
+/* Copyright (C) 2023 Alif Semiconductor - All Rights Reserved.
+ * Use, distribution and modification of this code is permitted under the
+ * terms stated in the Alif Semiconductor Software License Agreement
+ *
+ * You should have received a copy of the Alif Semiconductor Software
+ * License Agreement with this file. If not, please write to:
+ * contact@alifsemi.com, or visit: https://alifsemi.com/license
+ *
+ */
+
 /*
  * SPDX-FileCopyrightText: Copyright 2021-2022, 2024 Arm Limited and/or its
  * affiliates <open-source-office@arm.com>
