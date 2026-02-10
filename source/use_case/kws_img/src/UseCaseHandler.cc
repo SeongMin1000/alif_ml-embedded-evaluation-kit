@@ -117,10 +117,12 @@ namespace app {
         size_t imgModelLen = ctx.Get<size_t>("imgModelLen");
 
         /* Init Image Model */
+        uint32_t start = Get_SysTick_Cycle_Count32();
         if (!model.Init(tensorArena, tensorArenaSize, imgModelPtr, imgModelLen)) {
              printf_err("Image Model Init failed\n");
              return false;
         }
+        info("Image Model Init time = %.3f ms\n", (double)(Get_SysTick_Cycle_Count32() - start) / SystemCoreClock * 1000);
 
         TfLiteTensor* inputTensor  = model.GetInputTensor(0);
         TfLiteTensor* outputTensor = model.GetOutputTensor(0);
@@ -210,10 +212,12 @@ namespace app {
         size_t kwsModelLen = ctx.Get<size_t>("kwsModelLen");
 
         /* 1. Initial KWS model initialization */
+        uint32_t start_init = Get_SysTick_Cycle_Count32();
         if (!model.Init(tensorArena, tensorArenaSize, kwsModelPtr, kwsModelLen)) {
              printf_err("KWS Model Init failed\n");
              return false;
         }
+        info("KWS Model First Init time = %.3f ms\n", (double)(Get_SysTick_Cycle_Count32() - start_init) / SystemCoreClock * 1000);
 
         int index = 0;
         std::vector<arm::app::kws::KwsResult> infResults;
@@ -316,10 +320,12 @@ namespace app {
                     /* 2. Re-initialize the KWS model after the image handler returns.
                      *    This is critical to reclaim the tensor arena for KWS. */
                     info("Returning to KWS... Re-initializing model.\n");
+                    uint32_t start_reinit = Get_SysTick_Cycle_Count32();
                     if (!model.Init(tensorArena, tensorArenaSize, kwsModelPtr, kwsModelLen)) {
                         printf_err("KWS Re-Init failed\n");
                         return false;
                     }
+                    info("KWS Model Re-Init time = %.3f ms\n", (double)(Get_SysTick_Cycle_Count32() - start_reinit) / SystemCoreClock * 1000);
 
                     info("Restarting audio capture...\n");
                     hal_get_audio_data(audio_inf + AUDIO_SAMPLES, AUDIO_STRIDE);
