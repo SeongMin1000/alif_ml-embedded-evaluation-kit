@@ -71,6 +71,31 @@ void MainLoop()
 {
     init_trigger_tx();
 
+    /* Model wrapper objects. */
+    arm::app::MicroNetKwsModel kwsModel;
+    arm::app::MobileNetModel imgModel;
+
+    /* Load the models. */
+    if (!kwsModel.Init(arm::app::tensorArena,
+                       sizeof(arm::app::tensorArena),
+                       arm::app::kws::GetModelPointer(),
+                       arm::app::kws::GetModelLen())) {
+        printf_err("Failed to initialise KWS model\n");
+        return;
+    }
+
+    /* Initialise the image model using the same allocator from KWS
+     * to re-use the tensor arena. */
+    if (!imgModel.Init(arm::app::tensorArena,
+                       sizeof(arm::app::tensorArena),
+                       arm::app::img_class::GetModelPointer(),
+                       arm::app::img_class::GetModelLen(),
+                       kwsModel.GetAllocator())) {
+        printf_err("Failed to initialise Image model\n");
+        return;
+    }
+
+    /* Instantiate application context. */
     arm::app::ApplicationContext caseContext;
     arm::app::Profiler profiler{"kws_img"};
     caseContext.Set<arm::app::Profiler&>("profiler", profiler);
@@ -78,7 +103,6 @@ void MainLoop()
     // -------------------------------------------------------------------------
     // KWS Resource Configuration
     // -------------------------------------------------------------------------
-    arm::app::MicroNetKwsModel kwsModel;
     caseContext.Set<arm::app::Model&>("kwsModel", kwsModel);
 
     caseContext.Set<int>("frameLength", arm::app::kws::g_FrameLength);
@@ -94,9 +118,8 @@ void MainLoop()
     caseContext.Set<const std::vector<std::string>&>("kwsLabels", kwsLabels);
 
     // -------------------------------------------------------------------------
-    // Image Classification Configurations
+    // Image Classification Resource Configuration
     // -------------------------------------------------------------------------
-    arm::app::MobileNetModel imgModel;
     caseContext.Set<arm::app::Model&>("imgModel", imgModel);
 
     caseContext.Set<float>("imgScoreThreshold", arm::app::img_class::g_ScoreThreshold);
@@ -107,18 +130,6 @@ void MainLoop()
     std::vector<std::string> imgLabels;
     arm::app::img_class::GetLabelsVector(imgLabels);
     caseContext.Set<const std::vector<std::string>&>("imgLabels", imgLabels);
-
-    // -------------------------------------------------------------------------
-    // Shared Resource Registration
-    // -------------------------------------------------------------------------
-    caseContext.Set<uint8_t*>("tensorArena", arm::app::tensorArena);
-    caseContext.Set<size_t>("tensorArenaSize", sizeof(arm::app::tensorArena));
-    
-    caseContext.Set<uint8_t*>("kwsModelPtr", arm::app::kws::GetModelPointer());
-    caseContext.Set<size_t>("kwsModelLen", arm::app::kws::GetModelLen());
-
-    caseContext.Set<uint8_t*>("imgModelPtr", arm::app::img_class::GetModelPointer());
-    caseContext.Set<size_t>("imgModelLen", arm::app::img_class::GetModelLen());
 
     info("Starting KWS -> Image Classification Loop...\n");
     
