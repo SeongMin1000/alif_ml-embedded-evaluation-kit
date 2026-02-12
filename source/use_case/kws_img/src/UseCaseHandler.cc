@@ -111,18 +111,11 @@ namespace app {
     {
         auto& profiler = ctx.Get<Profiler&>("profiler");
         auto& model    = ctx.Get<Model&>("imgModel");
-        uint8_t* tensorArena = ctx.Get<uint8_t*>("tensorArena");
-        size_t tensorArenaSize = ctx.Get<size_t>("tensorArenaSize");
-        uint8_t* imgModelPtr = ctx.Get<uint8_t*>("imgModelPtr");
-        size_t imgModelLen = ctx.Get<size_t>("imgModelLen");
 
-        /* Init Image Model */
-        uint32_t start = Get_SysTick_Cycle_Count32();
-        if (!model.Init(tensorArena, tensorArenaSize, imgModelPtr, imgModelLen)) {
-             printf_err("Image Model Init failed\n");
-             return false;
+        if (!model.IsInited()) {
+            printf_err("Image model is not initialised\n");
+            return false;
         }
-        info("Image Model Init time = %.3f ms\n", (double)(Get_SysTick_Cycle_Count32() - start) / SystemCoreClock * 1000);
 
         TfLiteTensor* inputTensor  = model.GetInputTensor(0);
         TfLiteTensor* outputTensor = model.GetOutputTensor(0);
@@ -131,7 +124,6 @@ namespace app {
         const uint32_t nRows       = inputShape->data[MobileNetModel::ms_inputRowsIdx];
         const uint32_t nChannels   = inputShape->data[MobileNetModel::ms_inputChannelsIdx];
 
-        /* Create Process Objects Locally */
         ImgClassPreProcess preProcess = ImgClassPreProcess(inputTensor, model.IsDataSigned());
         std::vector<ClassificationResult> results;
         ImgClassPostProcess postProcess = ImgClassPostProcess(outputTensor,
@@ -152,7 +144,7 @@ namespace app {
             hal_camera_start();
             uint32_t capturedFrameSize = 0;
             const uint8_t* imgSrc = hal_camera_get_captured_frame(&capturedFrameSize);
-            // If no image is available from the camera, break the loop.
+
             if (!imgSrc || !capturedFrameSize) {
                 info("No more images available (Index end).\n");
                 break;
@@ -164,7 +156,6 @@ namespace app {
             
             const size_t imgSz = inputTensor->bytes < capturedFrameSize ? inputTensor->bytes : capturedFrameSize;
 
-            /* Run Inference */
             uint32_t start = Get_SysTick_Cycle_Count32();
             if (!preProcess.DoPreProcess(imgSrc, imgSz)) return false;
             info("Preprocessing time = %.3f ms\n", (double)(Get_SysTick_Cycle_Count32() - start) / SystemCoreClock * 1000);
@@ -172,6 +163,7 @@ namespace app {
             start = Get_SysTick_Cycle_Count32();
             if (!RunInference(model, profiler)) return false;
             info("Inference time = %.3f ms\n", (double)(Get_SysTick_Cycle_Count32() - start) / SystemCoreClock * 1000);
+            profiler.PrintProfilingResult();
 
             start = Get_SysTick_Cycle_Count32();
             if (!postProcess.DoPostProcess()) return false;
@@ -181,12 +173,8 @@ namespace app {
 
         hal_camera_stop();
 
-        // If no images were processed (e.g., the image source was empty), a small
-        // delay is required here. Returning to the KWS handler too quickly and
-        // re-initializing the audio driver can lead to hardware instability.
         if (processed_count == 0) {
             info("Images skipped! Waiting for hardware stability...\n");
-            // Busy-wait for an arbitrary amount of time.
             for(volatile int k=0; k<50000000; k++); 
         }
         
@@ -201,23 +189,28 @@ namespace app {
         auto& profiler = ctx.Get<Profiler&>("profiler");
         auto& model = ctx.Get<Model&>("kwsModel");
         
+        if (!model.IsInited()) {
+            printf_err("KWS model is not initialised\n");
+            return false;
+        }
+
         const auto mfccFrameLength = ctx.Get<int>("frameLength");
         const auto mfccFrameStride = ctx.Get<int>("frameStride");
         const auto audioRate = ctx.Get<int>("audioRate");
         const auto scoreThreshold = ctx.Get<float>("kwsScoreThreshold");
 
-        uint8_t* tensorArena = ctx.Get<uint8_t*>("tensorArena");
-        size_t tensorArenaSize = ctx.Get<size_t>("tensorArenaSize");
-        uint8_t* kwsModelPtr = ctx.Get<uint8_t*>("kwsModelPtr");
-        size_t kwsModelLen = ctx.Get<size_t>("kwsModelLen");
+        TfLiteTensor* inputTensor = model.GetInputTensor(0);
+        TfLiteTensor* outputTensor = model.GetOutputTensor(0);
+        TfLiteIntArray* inputShape = model.GetInputShape(0);
+        
+        const uint32_t numMfccFeatures = inputShape->data[MicroNetKwsModel::ms_inputColsIdx];
+        const uint32_t numMfccFrames = inputShape->data[MicroNetKwsModel::ms_inputRowsIdx];
+        const float secondsPerSample = 1.0f / audioRate;
 
-        /* 1. Initial KWS model initialization */
-        uint32_t start_init = Get_SysTick_Cycle_Count32();
-        if (!model.Init(tensorArena, tensorArenaSize, kwsModelPtr, kwsModelLen)) {
-             printf_err("KWS Model Init failed\n");
-             return false;
-        }
-        info("KWS Model First Init time = %.3f ms\n", (double)(Get_SysTick_Cycle_Count32() - start_init) / SystemCoreClock * 1000);
+        KwsPreProcess preProcess(inputTensor, numMfccFeatures, numMfccFrames, mfccFrameLength, mfccFrameStride);
+        std::vector<ClassificationResult> singleInfResult;
+        KwsPostProcess postProcess(outputTensor, ctx.Get<KwsClassifier &>("kwsClassifier"),
+                                    ctx.Get<std::vector<std::string>&>("kwsLabels"), singleInfResult);
 
         int index = 0;
         std::vector<arm::app::kws::KwsResult> infResults;
@@ -232,25 +225,6 @@ namespace app {
 
         /* Main audio processing loop */
         do {
-            /* Re-acquire tensor pointers at the start of each loop. This is necessary
-             * because the model is re-initialized when switching back from the image
-             * handler, which can invalidate previous tensor pointers. */
-            TfLiteTensor* inputTensor = model.GetInputTensor(0);
-            TfLiteTensor* outputTensor = model.GetOutputTensor(0);
-            TfLiteIntArray* inputShape = model.GetInputShape(0);
-            
-            const uint32_t numMfccFeatures = inputShape->data[MicroNetKwsModel::ms_inputColsIdx];
-            const uint32_t numMfccFrames = inputShape->data[MicroNetKwsModel::ms_inputRowsIdx];
-            const float secondsPerSample = 1.0f / audioRate;
-
-            /* Stack-allocate pre/post-processing objects in each iteration. This
-             * avoids dangling references to tensors, as the underlying model
-             * object is re-initialized during the loop. */
-            KwsPreProcess preProcess(inputTensor, numMfccFeatures, numMfccFrames, mfccFrameLength, mfccFrameStride);
-            std::vector<ClassificationResult> singleInfResult;
-            KwsPostProcess postProcess(outputTensor, ctx.Get<KwsClassifier &>("kwsClassifier"),
-                                       ctx.Get<std::vector<std::string>&>("kwsLabels"), singleInfResult);
-
             int err = hal_wait_for_audio();
             if (err) {
                 printf_err("hal_wait_for_audio failed with error: %d\n", err);
@@ -275,6 +249,7 @@ namespace app {
                 return false;
             }
             info("Inference time = %.3f ms\n", (double)(Get_SysTick_Cycle_Count32() - start) / SystemCoreClock * 1000);
+            profiler.PrintProfilingResult();
 
             start = Get_SysTick_Cycle_Count32();
             if (!postProcess.DoPostProcess()) {
@@ -282,7 +257,6 @@ namespace app {
                 return false;
             }
             info("Postprocessing time = %.3f ms\n", (double)(Get_SysTick_Cycle_Count32() - start) / SystemCoreClock * 1000);
-
 
             if (infResults.size() == RESULTS_MEMORY) infResults.erase(infResults.begin());
             infResults.emplace_back(arm::app::kws::KwsResult(singleInfResult,
@@ -294,7 +268,6 @@ namespace app {
             hal_lcd_clear(COLOR_BLACK);
             PresentKwsResults(infResults);
 
-            // Log inference results to the serial port.
             if (!singleInfResult.empty()) {
                 info("Inference #%d: Label=%s, Score=%.2f%%\n", 
                      index, singleInfResult[0].m_label.c_str(), singleInfResult[0].m_normalisedVal * 100);
@@ -311,27 +284,15 @@ namespace app {
 
                     hal_audio_stop();
                     
-                    /* 1. Run the Image Handler. This will re-initialize the tensor
-                     *    arena for the image classification model. */
                     if (!ClassifyImageHandler(ctx)) {
                         printf_err("Image Handler failed\n");
                     }
 
-                    /* 2. Re-initialize the KWS model after the image handler returns.
-                     *    This is critical to reclaim the tensor arena for KWS. */
-                    info("Returning to KWS... Re-initializing model.\n");
-                    uint32_t start_reinit = Get_SysTick_Cycle_Count32();
-                    if (!model.Init(tensorArena, tensorArenaSize, kwsModelPtr, kwsModelLen)) {
-                        printf_err("KWS Re-Init failed\n");
-                        return false;
-                    }
-                    info("KWS Model Re-Init time = %.3f ms\n", (double)(Get_SysTick_Cycle_Count32() - start_reinit) / SystemCoreClock * 1000);
+                    info("Returning to KWS...\n");
 
                     info("Restarting audio capture...\n");
                     hal_get_audio_data(audio_inf + AUDIO_SAMPLES, AUDIO_STRIDE);
                     
-                    /* 3. Continue the loop. The pre/post-processing objects will be
-                     *    re-created at the top of the loop with fresh tensor pointers. */
                     hal_lcd_clear(COLOR_BLACK);
                     continue; 
                 }
